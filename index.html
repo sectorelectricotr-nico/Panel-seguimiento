@@ -7732,18 +7732,19 @@ window.__tipoRec=function(r){var s=N((r&&r.titulo)+' '+(r&&r.notas||''));var sf=
     // Quedan solo las que están en Drive, más las creadas acá que todavía se están subiendo.
     tareas = tareas.filter((t) => t.pendienteDrive || (t.origen === 'drive' && remIds.has(t.id)) || (t._subida && Date.now() - t._subida < 300000));
     const actuales = new Map(tareas.map((t) => [t.id, t]));
-    const CAMPOS = ['titulo', 'fecha', 'asignado', 'cumplido'];
+    const CAMPOS = ['titulo', 'fecha', 'asignado', 'cumplido', 'notas'];
+    drv.sinNotas = remotas.length > 0 && !remotas.some((r) => r && 'notas' in r);
     for (const r of remotas) {
       const d = { titulo: String(r.titulo || ''), fecha: valida(r.fecha) ? r.fecha : '', asignado: String(r.asignado || ''), cumplido: r.cumplido === true };
+      if ('notas' in r) d.notas = String(r.notas == null ? '' : r.notas);   // columna «notas»
       const ex = actuales.get(r.id);
       if (ex) {
         // Si el Excel cambió un dato desde la última vez, gana el Excel; si no, se respeta lo editado aquí.
         const antes = ex._drive || {};
-        for (const c of CAMPOS) if (antes[c] === undefined || d[c] !== antes[c]) ex[c] = d[c];
+        for (const c of CAMPOS) { if (!(c in d)) continue; if (antes[c] === undefined || d[c] !== antes[c]) ex[c] = d[c]; }
         ex._drive = d;
-        if (r.notas && !ex.notas) ex.notas = String(r.notas);
       } else if (!vistos.has(r.id)) {
-        tareas.push({ id: r.id, ...d, notas: String(r.notas || ''), origen: 'drive', _drive: d, creado: new Date().toISOString() });
+        tareas.push({ id: r.id, ...d, notas: d.notas || '', origen: 'drive', _drive: d, creado: new Date().toISOString() });
       }
       vistos.add(r.id);
     }
@@ -7768,7 +7769,7 @@ window.__tipoRec=function(r){var s=N((r&&r.titulo)+' '+(r&&r.notas||''));var sf=
     if (texto) { el.textContent = texto; return; }
     if (!urlValida(drv.url)) { el.textContent = 'Sin conectar. Pega la URL del script y su clave.'; return; }
     if (drv.error) { el.textContent = 'No se pudo actualizar: ' + drv.error; el.classList.add('err'); return; }
-    if (drv.ultima) { el.textContent = 'Actualizado a las ' + hora(drv.ultima) + (drv.archivo ? ' desde ' + drv.archivo : '') + '. Se actualiza solo cada minuto.'; el.classList.add('ok'); return; }
+    if (drv.ultima) { el.textContent = 'Actualizado a las ' + hora(drv.ultima) + (drv.archivo ? ' desde ' + drv.archivo : '') + '. Se actualiza solo cada minuto.' + (drv.sinNotas ? ' Atención: el script de Drive no devuelve la columna «notas»; las notas quedan solo en este navegador hasta actualizar el script.' : ''); el.classList.add(drv.sinNotas ? 'err' : 'ok'); return; }
     el.textContent = 'Conectado. Esperando la primera actualización…';
   }
 
@@ -7787,6 +7788,7 @@ window.__tipoRec=function(r){var s=N((r&&r.titulo)+' '+(r&&r.notas||''));var sf=
       const actual = tareas.find((x) => x.id === t.id);
       if (actual) {
         const d = { titulo: String(r.tarea.titulo || ''), fecha: valida(r.tarea.fecha) ? r.tarea.fecha : '', asignado: String(r.tarea.asignado || ''), cumplido: r.tarea.cumplido === true };
+        if ('notas' in r.tarea) d.notas = String(r.tarea.notas == null ? '' : r.tarea.notas);
         if (st.editId === actual.id) st.editId = r.tarea.id;
         actual.id = r.tarea.id;
         actual.origen = 'drive';
@@ -7832,8 +7834,9 @@ window.__tipoRec=function(r){var s=N((r&&r.titulo)+' '+(r&&r.notas||''));var sf=
       const actual = tareas.find((x) => x === t || x.id === idAntes);
       if (actual) {
         const d = { titulo: String(r.tarea.titulo || ''), fecha: valida(r.tarea.fecha) ? r.tarea.fecha : '', asignado: String(r.tarea.asignado || ''), cumplido: r.tarea.cumplido === true };
+        if ('notas' in r.tarea) d.notas = String(r.tarea.notas == null ? '' : r.tarea.notas);
         // Si se volvió a editar mientras se guardaba, queda pendiente para el próximo intento.
-        const cambioMientras = ['titulo', 'fecha', 'asignado', 'cumplido'].some((c) => actual[c] !== d[c]);
+        const cambioMientras = ['titulo', 'fecha', 'asignado', 'cumplido', 'notas'].some((c) => c in d && (actual[c] || '') !== (d[c] || '') && (c !== 'cumplido' || actual[c] !== d[c]));
         if (st.editId === actual.id) st.editId = r.tarea.id;
         actual.id = r.tarea.id;   // el id cambia si cambió el texto o la persona asignada
         actual._drive = d;
